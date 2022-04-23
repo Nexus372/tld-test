@@ -6,6 +6,9 @@ use Github\Client;
 
 class ApiGithubManager
 {
+    /**
+     * @var Client
+     */
     protected $client;
 
     public function __construct()
@@ -13,18 +16,21 @@ class ApiGithubManager
         $this->client = new Client();
     }
 
-    public function connect(string $user, string $repository)
-    {
-        $repositories = $this->client->api('user')->repositories('symfony');
-
-        dd($repositories);
-    }
-
+    /**
+     * Get commits using user and repository by since date and until date
+     *
+     * @param string $user
+     * @param string $repository
+     * @param \DateTime $since
+     * @param \DateTime $until
+     * @param int $page
+     * @return array
+     * @throws \Exception
+     */
     public function getCommitsByWeek(string $user, string $repository, \DateTime $since, \DateTime $until, $page = 1)
     {
         $commits = $this->client->api('repo')->commits()->all($user, $repository, array(
-            'sha' => '6.1',
-            'per_page' => 20,
+            'per_page' => 500,
             'page' => $page,
             'since' => $since->format(\DateTime::ISO8601),
             'until' => $until->format(\DateTime::ISO8601)
@@ -50,10 +56,21 @@ class ApiGithubManager
         return $result;
     }
 
+    /**
+     * Recursive method to get commits by week
+     *
+     * @param string $user
+     * @param string $repository
+     * @param \DateTime $since
+     * @param \DateTime $until
+     * @param int $page
+     * @param array $result
+     * @return array|mixed
+     * @throws \Exception
+     */
     public function getCommitsByWeekRecursive(string $user, string $repository, \DateTime $since, \DateTime $until, $page = 1, $result = [])
     {
         $commits = $this->client->api('repo')->commits()->all($user, $repository, array(
-            'sha' => '6.1',
             'per_page' => 100,
             'page' => $page,
             'since' => $since->format(\DateTime::ISO8601),
@@ -65,6 +82,7 @@ class ApiGithubManager
             $date = new \DateTime($commit['commit']['committer']['date']);
             $week = intval($date->format("W"));
 
+            // Check date if we need a new search
             if ($date < $since) {
                 $continue = false;
                 break;
@@ -83,7 +101,9 @@ class ApiGithubManager
         }
 
         if ($continue) {
-            $this->getCommitsByWeek($user, $repository, $since, $until, $page + 1, $result);
+            // Avoid ban from github
+            usleep(300);
+            $this->getCommitsByWeekRecursive($user, $repository, $since, $until, $page + 1, $result);
         }
 
         return $result;
